@@ -1,0 +1,46 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  order:
+    build:
+      context: .
+      dockerfile: order/Dockerfile
+    environment:
+      BROKER_URL: amqp://guest:guest@rabbitmq:5672/
+      DATABASE_PATH: /data/orders.db
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - order_data:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  notification:
+    build:
+      context: .
+      dockerfile: notification/Dockerfile
+    environment:
+      BROKER_URL: amqp://guest:guest@rabbitmq:5672/
+      DATABASE_PATH: /data/notifications.db
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - notification_data:/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+volumes:
+  order_data:
+  notification_data:
